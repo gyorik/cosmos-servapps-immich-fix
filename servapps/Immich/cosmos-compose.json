@@ -2,26 +2,57 @@
   "cosmos-installer": {
     "form": [
       {
-        "initialValue": "{DefaultDataPath}/immich-photos",
-        "label": "What is the path to your uploaded Photos?",
         "name": "photoPath",
+        "label": "What is the path to your uploaded Photos?",
+        "initialValue": "{DefaultDataPath}/immich-photos",
         "type": "text"
       },
-      {
-        "initialValue": false,
-        "label": "Do you want to add a backup agent for the database? (https://immich.app/docs/administration/backup-and-restore)",
+      { 
         "name": "installImmichBackup",
+        "label": "Do you want to add a backup agent for the database? (https://immich.app/docs/administration/backup-and-restore)",
+        "initialValue": false,
         "type": "checkbox"
       }
+      {if Context.installImmichBackup}
+      , { 
+        "name": "ImmichBackupPath",
+        "label": "Where do you want to save that backup?",
+        "initialValue": "{DefaultDataPath}/immich-backup",
+        "type": "text"
+      }
+      {/if}
     ]
   },
   "minVersion": "0.12.0",
-  "networks": {
-    "{ServiceName}": {}
-  },
   "services": {
-    "machine-learning": {
-      "container_name": "machine-learning",
+    "{ServiceName}": {
+      "container_name": "{ServiceName}",
+      "hostname": "{ServiceName}",
+      "image": "ghcr.io/immich-app/immich-server:release",
+      "command": "start.sh immich",
+      "networks": {
+        "{ServiceName}": {}
+      },
+      "volumes": [
+        {
+          "source": "{Context.photoPath}",
+          "target": "/usr/src/app/upload",
+          "type": "bind"
+        },
+        {
+          "source": "/etc/localtime",
+          "target": "/etc/localtime",
+          "type": "bind"
+        }
+      ],
+      "labels": {
+        "cosmos-persistent-env": "UPLOAD_LOCATION, DB_PASSWORD, DB_DATABASE_NAME",
+        "cosmos-force-network-secured": "true",
+        "cosmos-auto-update": "false",
+        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
+        "cosmos-stack": "{ServiceName}",
+        "cosmos-stack-main": "{ServiceName}"
+      },
       "environment": [
         "UPLOAD_LOCATION=/usr/src/app/upload",
         "DB_PASSWORD={Passwords.1}",
@@ -30,35 +61,95 @@
         "DB_DATABASE_NAME=immich",
         "REDIS_HOSTNAME={ServiceName}-redis"
       ],
-      "hostname": "machine-learning",
-      "image": "ghcr.io/immich-app/immich-machine-learning:release",
-      "labels": {
-        "cosmos-auto-update": "false",
-        "cosmos-force-network-secured": "true",
-        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
-        "cosmos-persistent-env": "UPLOAD_LOCATION, DB_PASSWORD, DB_DATABASE_NAME",
-        "cosmos-stack": "{ServiceName}",
-        "cosmos-stack-main": "{ServiceName}"
-      },
+      "depends_on": [
+        "{ServiceName}-redis",
+        "{ServiceName}-database"
+      ],
+      "routes": [
+        {
+          "name": "{ServiceName}",
+          "description": "Expose {ServiceName} to the web",
+          "useHost": true,
+          "target": "http://{ServiceName}:3001",
+          "mode": "SERVAPP",
+          "Timeout": 14400000,
+          "ThrottlePerMinute": 12000,
+          "BlockCommonBots": true,
+          "SmartShield": {
+            "Enabled": true,
+            "PolicyStrictness": 3,
+            "PerUserRequestLimit": 12000,
+            "PerUserSimultaneous": 100,
+            "MaxGlobalSimultaneous": 1000
+          }
+        }
+      ],
+      "restart": "always"
+    },
+    "microservices": {
+      "container_name": "microservices",
+      "hostname": "microservices",
+      "image": "ghcr.io/immich-app/immich-server:release",
+      "command": "start.sh microservices",
       "networks": {
         "{ServiceName}": {}
       },
-      "restart": "always",
+      "volumes": [
+        {
+          "source": "{Context.photoPath}",
+          "target": "/usr/src/app/upload",
+          "type": "bind"
+        },
+        {
+          "source": "/etc/localtime",
+          "target": "/etc/localtime",
+          "type": "bind"
+        }
+      ],
+      "labels": {
+        "cosmos-persistent-env": "UPLOAD_LOCATION, DB_PASSWORD, DB_DATABASE_NAME",
+        "cosmos-force-network-secured": "true",
+        "cosmos-auto-update": "false",
+        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
+        "cosmos-stack": "{ServiceName}",
+        "cosmos-stack-main": "{ServiceName}"
+      },
+      "environment": [
+        "UPLOAD_LOCATION=/usr/src/app/upload",
+        "DB_PASSWORD={Passwords.1}",
+        "DB_HOSTNAME={ServiceName}-database",
+        "DB_USERNAME=postgres",
+        "DB_DATABASE_NAME=immich",
+        "REDIS_HOSTNAME={ServiceName}-redis"
+      ],
+      "depends_on": [
+        "{ServiceName}-redis",
+        "{ServiceName}-database"
+      ],
+      "restart": "always"
+    },
+    "machine-learning": {
+      "container_name": "machine-learning",
+      "hostname": "machine-learning",
+      "image": "ghcr.io/immich-app/immich-machine-learning:release",
+      "networks": {
+        "{ServiceName}": {}
+      },
       "volumes": [
         {
           "source": "{ServiceName}-model-cache",
           "target": "/cache",
           "type": "volume"
         }
-      ]
-    },
-    "microservices": {
-      "command": "start.sh microservices",
-      "container_name": "microservices",
-      "depends_on": [
-        "{ServiceName}-redis",
-        "{ServiceName}-database"
       ],
+      "labels": {
+        "cosmos-persistent-env": "UPLOAD_LOCATION, DB_PASSWORD, DB_DATABASE_NAME",
+        "cosmos-force-network-secured": "true",
+        "cosmos-auto-update": "false",
+        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
+        "cosmos-stack": "{ServiceName}",
+        "cosmos-stack-main": "{ServiceName}"
+      },
       "environment": [
         "UPLOAD_LOCATION=/usr/src/app/upload",
         "DB_PASSWORD={Passwords.1}",
@@ -67,140 +158,96 @@
         "DB_DATABASE_NAME=immich",
         "REDIS_HOSTNAME={ServiceName}-redis"
       ],
-      "hostname": "microservices",
-      "image": "ghcr.io/immich-app/immich-server:release",
-      "labels": {
-        "cosmos-auto-update": "false",
-        "cosmos-force-network-secured": "true",
-        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
-        "cosmos-persistent-env": "UPLOAD_LOCATION, DB_PASSWORD, DB_DATABASE_NAME",
-        "cosmos-stack": "{ServiceName}",
-        "cosmos-stack-main": "{ServiceName}"
-      },
-      "networks": {
-        "{ServiceName}": {}
-      },
-      "restart": "always",
-      "volumes": [
-        {
-          "source": "{Context.photoPath}",
-          "target": "/usr/src/app/upload",
-          "type": "bind"
-        },
-        {
-          "source": "/etc/localtime",
-          "target": "/etc/localtime",
-          "type": "bind"
-        }
-      ]
+      "restart": "always"
     },
-    "{ServiceName}": {
-      "command": "start.sh immich",
-      "container_name": "{ServiceName}",
-      "depends_on": [
-        "{ServiceName}-redis",
-        "{ServiceName}-database"
-      ],
-      "environment": [
-        "UPLOAD_LOCATION=/usr/src/app/upload",
-        "DB_PASSWORD={Passwords.1}",
-        "DB_HOSTNAME={ServiceName}-database",
-        "DB_USERNAME=postgres",
-        "DB_DATABASE_NAME=immich",
-        "REDIS_HOSTNAME={ServiceName}-redis"
-      ],
-      "hostname": "{ServiceName}",
-      "image": "ghcr.io/immich-app/immich-server:release",
-      "labels": {
-        "cosmos-auto-update": "false",
-        "cosmos-force-network-secured": "true",
-        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
-        "cosmos-persistent-env": "UPLOAD_LOCATION, DB_PASSWORD, DB_DATABASE_NAME",
-        "cosmos-stack": "{ServiceName}",
-        "cosmos-stack-main": "{ServiceName}"
-      },
+    "{ServiceName}-redis": {
+      "container_name": "{ServiceName}-redis",
+      "hostname": "{ServiceName}-redis",
+      "image": "redis:6.2-alpine@sha256:80cc8518800438c684a53ed829c621c94afd1087aaeb59b0d4343ed3e7bcf6c5",
       "networks": {
         "{ServiceName}": {}
       },
-      "restart": "always",
-      "routes": [
-        {
-          "BlockCommonBots": true,
-          "description": "Expose {ServiceName} to the web",
-          "mode": "SERVAPP",
-          "name": "{ServiceName}",
-          "SmartShield": {
-            "Enabled": true,
-            "MaxGlobalSimultaneous": 1000,
-            "PerUserRequestLimit": 12000,
-            "PerUserSimultaneous": 100,
-            "PolicyStrictness": 3
-          },
-          "target": "http://{ServiceName}:3001",
-          "ThrottlePerMinute": 12000,
-          "Timeout": 14400000,
-          "useHost": true
-        }
-      ],
-      "volumes": [
-        {
-          "source": "{Context.photoPath}",
-          "target": "/usr/src/app/upload",
-          "type": "bind"
-        },
-        {
-          "source": "/etc/localtime",
-          "target": "/etc/localtime",
-          "type": "bind"
-        }
-      ]
+      "labels": {
+        "cosmos-persistent-env": "POSTGRES_PASSWORD, POSTGRES_USER, POSTGRES_DB",
+        "cosmos-force-network-secured": "true",
+        "cosmos-auto-update": "false",
+        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
+        "cosmos-stack": "{ServiceName}",
+        "cosmos-stack-main": "{ServiceName}"
+      },
+      "restart": "always"
     },
     "{ServiceName}-database": {
       "container_name": "{ServiceName}-database",
+      "hostname": "{ServiceName}-database",
+      "image": "tensorchord/pgvecto-rs:pg14-v0.1.11",
+      "user": "postgres",
+      "networks": {
+        "{ServiceName}": {}
+      },
+      "labels": {
+        "cosmos-persistent-env": "POSTGRES_PASSWORD, POSTGRES_USER, POSTGRES_DB",
+        "cosmos-force-network-secured": "true",
+        "cosmos-auto-update": "false",
+        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
+        "cosmos-stack": "{ServiceName}",
+        "cosmos-stack-main": "{ServiceName}"
+      },
       "environment": [
         "POSTGRES_PASSWORD={Passwords.1}",
         "POSTGRES_USER=postgres",
         "POSTGRES_DB=immich"
       ],
-      "hostname": "{ServiceName}-database",
-      "image": "tensorchord/pgvecto-rs:pg14-v0.1.11",
-      "labels": {
-        "cosmos-auto-update": "false",
-        "cosmos-force-network-secured": "true",
-        "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
-        "cosmos-persistent-env": "POSTGRES_PASSWORD, POSTGRES_USER, POSTGRES_DB",
-        "cosmos-stack": "{ServiceName}",
-        "cosmos-stack-main": "{ServiceName}"
-      },
-      "networks": {
-        "{ServiceName}": {}
-      },
-      "restart": "always",
-      "user": "postgres",
       "volumes": [
         {
           "source": "{ServiceName}-pgdata",
           "target": "/var/lib/postgresql/data",
           "type": "volume"
         }
-      ]
-    },
-    "{ServiceName}-redis": {
-      "container_name": "{ServiceName}-redis",
-      "hostname": "{ServiceName}-redis",
-      "image": "redis:6.2-alpine@sha256:80cc8518800438c684a53ed829c621c94afd1087aaeb59b0d4343ed3e7bcf6c5",
+      ],
+      "restart": "always"
+    }
+    {if Context.installImmichBackup}
+    ,
+    "{ServiceName}-backup": {
+      "image": "prodrigestivill/postgres-backup-local",
+      "container_name": "{ServiceName}-backup",
+      "hostname": "{ServiceName}-backup",
+      "restart": "unless-stopped",
       "labels": {
-        "cosmos-auto-update": "false",
+        "cosmos-persistent-env": "POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DB_DATABASE_NAME",
         "cosmos-force-network-secured": "true",
+        "cosmos-auto-update": "false",
         "cosmos-icon": "https://azukaar.github.io/cosmos-servapps-official/servapps/Immich/icon.png",
-        "cosmos-persistent-env": "POSTGRES_PASSWORD, POSTGRES_USER, POSTGRES_DB",
         "cosmos-stack": "{ServiceName}",
         "cosmos-stack-main": "{ServiceName}"
       },
       "networks": {
         "{ServiceName}": {}
       },
-      "restart": "always"
+      "volumes": [
+        {
+          "source": "{Context.ImmichBackupPath}",
+          "target": "/db_dumps",
+          "type": "bind"
+        }
+      ],
+      "environment": [
+        "POSTGRES_HOST={ServiceName}-database",
+        "POSTGRES_DB=immich",
+        "POSTGRES_USER=postgres",
+        "POSTGRES_PASSWORD={Passwords.1}",
+        "SCHEDULE=@daily",
+        "BACKUP_KEEP_DAYS=7",
+        "BACKUP_KEEP_WEEKS=4",
+        "BACKUP_KEEP_MONTHS=6",
+        "BACKUP_DIR=/db_dumps",
+        "PUID=1000",
+        "PGID=1000"
+      ],
+      "depends_on": [
+        "{ServiceName}-database"
+      ]
     }
   }
 }
